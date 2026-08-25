@@ -848,9 +848,9 @@ function DailyReportModal({ report, restaurantName, onClose }) {
 
   return (
     <>
-      {/* Print-specific CSS styles */}
       <style>{`
         @media print {
+          /* Hide everything except printable receipt */
           body * {
             visibility: hidden !important;
           }
@@ -859,18 +859,19 @@ function DailyReportModal({ report, restaurantName, onClose }) {
           }
           #printable-receipt {
             position: absolute !important;
-            left: 50% !important;
-            transform: translateX(-50%) !important;
+            left: 0 !important;
+            right: 0 !important;
             top: 0 !important;
-            width: 100% !important;
-            max-width: 320px !important;
             margin: 0 auto !important;
+            width: 100% !important;
+            max-width: 280px !important;
+            box-sizing: border-box !important;
             padding: 10px !important;
           }
         }
       `}</style>
 
-      {/* Main Modal Container */}
+      {/* Main Modal Overlay */}
       <div 
         style={{
           position: "fixed",
@@ -882,43 +883,45 @@ function DailyReportModal({ report, restaurantName, onClose }) {
           display: "flex",
           justifyContent: "center",
           align-items: "center",
-          zIndex: 1000
+          zIndex: 1000,
+          padding: "16px"
         }}
       >
         <div 
           style={{
             backgroundColor: "#fff",
-            padding: "20px",
+            padding: "20px 16px",
             borderRadius: "8px",
-            maxWidth: "400px",
-            width: "90%",
+            width: "100%",
+            maxWidth: "340px",
+            boxSizing: "border-box",
             maxHeight: "90vh",
             overflowY: "auto"
           }}
         >
           {/* Printable Area */}
-          <div id="printable-receipt" style={{ textAlign: "center", color: "#231F1B" }}>
+          <div id="printable-receipt" style={{ textAlign: "center", color: "#231F1B", width: "100%", boxSizing: "border-box" }}>
             <h3 style={{ margin: "0 0 4px 0", fontWeight: "bold" }}>{restaurantName || "My Restaurant"}</h3>
             <p style={{ margin: "0 0 12px 0", fontSize: "12px", color: "#6B6058" }}>Sales receipt</p>
             <hr style={{ border: "none", borderTop: "1px dashed #ccc", margin: "12px 0" }} />
 
             <Row label="Date" value={t?.date || new Date().toLocaleDateString()} />
             <Row label="Time" value={t?.time || new Date().toLocaleTimeString()} />
-            <Row label="Item" value={t?.item || "—"} />
-            <Row label="Customer" value={t?.customer || "—"} />
+            <Row label="Item" value={t?.item || "—"} wrap />
+            <Row label="Customer" value={t?.customer || "—"} wrap />
             <Row label="Method" value={t?.method || "—"} />
 
             <hr style={{ border: "none", borderTop: "1px dashed #ccc", margin: "12px 0" }} />
 
-            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold", fontSize: "16px", margin: "12px 0" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontWeight: "bold", fontSize: "15px", margin: "12px 0" }}>
               <span>TOTAL</span>
               <span>KES {t?.total || t?.amount || 0}</span>
             </div>
 
-            <p style={{ margin: "20px 0 0 0", fontSize: "11px", color: "#6B6058" }}>Thank you — asante</p>
+            <p style={{ margin: "16px 0 0 0", fontSize: "11px", color: "#6B6058" }}>Thank you — asante</p>
           </div>
 
-          {/* Action Buttons (Hidden during print automatically) */}
+          {/* Action Buttons */}
           <div style={{ marginTop: "20px", display: "flex", gap: "10px", justifyContent: "flex-end" }}>
             <button 
               onClick={onClose}
@@ -927,7 +930,8 @@ function DailyReportModal({ report, restaurantName, onClose }) {
                 borderRadius: "6px",
                 border: "1px solid #ccc",
                 background: "#fff",
-                cursor: "pointer"
+                cursor: "pointer",
+                fontSize: "14px"
               }}
             >
               Close
@@ -940,7 +944,8 @@ function DailyReportModal({ report, restaurantName, onClose }) {
                 border: "none",
                 background: "#000",
                 color: "#fff",
-                cursor: "pointer"
+                cursor: "pointer",
+                fontSize: "14px"
               }}
             >
               Print
@@ -954,8 +959,8 @@ function DailyReportModal({ report, restaurantName, onClose }) {
 
 function Row({ label, value, wrap }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", margin: "6px 0", fontSize: "14px" }}>
-      <span style={{ color: "#6B6058", fontFamily: "system-ui, sans-serif" }}>{label}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", margin: "6px 0", fontSize: "13px" }}>
+      <span style={{ color: "#6B6058", fontFamily: "system-ui, sans-serif", flexShrink: 0 }}>{label}</span>
       <span style={{ color: "#231F1B", textAlign: "right", wordBreak: wrap ? "break-word" : "normal" }}>{value}</span>
     </div>
   );
