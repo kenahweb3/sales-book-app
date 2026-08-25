@@ -841,79 +841,121 @@ function DailyReportModal({ report, restaurantName, onClose }) {
   );
 }
 
-function ReceiptModal({ t, restaurantName, onClose }) {
-  const printRef = useRef();
-  const handlePrint = useReactToPrint({ contentRef: printRef });
+  function ReceiptModal({ t, restaurantName, onClose }) {
+  const handlePrint = () => {
+    window.print();
+  };
 
   return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "rgba(20,20,18,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 }}
-      onClick={onClose}
-    >
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "center", width: "100%", maxWidth: 340 }}>
-        <div
-          ref={printRef}
-          onClick={(e) => e.stopPropagation()}
-          style={{ background: "#fff", width: "100%", maxWidth: 380, margin: "0 auto", borderRadius: 4, padding: "26px 22px 18px", fontFamily: "ui-monospace, Menlo, monospace", position: "relative" }}
+    <>
+      {/* Print-specific CSS styles */}
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          #printable-receipt, #printable-receipt * {
+            visibility: visible !important;
+          }
+          #printable-receipt {
+            position: absolute !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: 320px !important;
+            margin: 0 auto !important;
+            padding: 10px !important;
+          }
+        }
+      `}</style>
+
+      {/* Main Modal Container */}
+      <div 
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          justifyContent: "center",
+          align-items: "center",
+          zIndex: 1000
+        }}
+      >
+        <div 
+          style={{
+            backgroundColor: "#fff",
+            padding: "20px",
+            borderRadius: "8px",
+            maxWidth: "400px",
+            width: "90%",
+            maxHeight: "90vh",
+            overflowY: "auto"
+          }}
         >
-          <button onClick={onClose} style={{ position: "absolute", top: 10, right: 10, background: "none", border: "none", color: "#B4B2A9" }}>
-            <X size={18} />
-          </button>
+          {/* Printable Area */}
+          <div id="printable-receipt" style={{ textAlign: "center", color: "#231F1B" }}>
+            <h3 style={{ margin: "0 0 4px 0", fontWeight: "bold" }}>{restaurantName || "My Restaurant"}</h3>
+            <p style={{ margin: "0 0 12px 0", fontSize: "12px", color: "#6B6058" }}>Sales receipt</p>
+            <hr style={{ border: "none", borderTop: "1px dashed #ccc", margin: "12px 0" }} />
 
-          <div style={{ textAlign: "center", fontFamily: "system-ui, sans-serif", fontWeight: 800, fontSize: 17, color: "#16324A" }}>
-            {restaurantName}
-          </div>
-          <div style={{ textAlign: "center", fontSize: 11, color: "#6B6058", marginTop: 2, fontFamily: "system-ui, sans-serif" }}>
-            Sales receipt
-          </div>
+            <Row label="Date" value={t?.date || new Date().toLocaleDateString()} />
+            <Row label="Time" value={t?.time || new Date().toLocaleTimeString()} />
+            <Row label="Item" value={t?.item || "—"} />
+            <Row label="Customer" value={t?.customer || "—"} />
+            <Row label="Method" value={t?.method || "—"} />
 
-          <div style={{ borderTop: "1px dashed #CFCCC4", margin: "16px 0" }} />
+            <hr style={{ border: "none", borderTop: "1px dashed #ccc", margin: "12px 0" }} />
 
-          <Row label="Date" value={new Date(t.time).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })} />
-          <Row label="Time" value={fmtTime(t.time)} />
-          <Row label="Item" value={t.item} wrap />
-          {t.customer && <Row label="Customer" value={t.customer} />}
-          <Row label="Method" value={t.method === "mpesa" ? "M-Pesa" : "Cash"} />
-          {t.method === "mpesa" && <Row label="Code" value={t.mpesaCode} />}
+            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold", fontSize: "16px", margin: "12px 0" }}>
+              <span>TOTAL</span>
+              <span>KES {t?.total || t?.amount || 0}</span>
+            </div>
 
-          <div style={{ borderTop: "1px dashed #CFCCC4", margin: "16px 0" }} />
-
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span style={{ fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#6B6058", fontWeight: 600 }}>TOTAL</span>
-            <span style={{ fontSize: 24, fontWeight: 800 }}>{money(t.amount)}</span>
+            <p style={{ margin: "20px 0 0 0", fontSize: "11px", color: "#6B6058" }}>Thank you — asante</p>
           </div>
 
-          <div
-            style={{
-              marginTop: 20, textAlign: "center", fontSize: 11, color: "#A9A69E", fontFamily: "system-ui, sans-serif", paddingTop: 12,
-              backgroundImage: "repeating-linear-gradient(90deg, #CFCCC4 0 6px, transparent 6px 12px)", backgroundSize: "12px 1px", backgroundRepeat: "no-repeat",
-            }}
-          >
-            Thank you — asante
+          {/* Action Buttons (Hidden during print automatically) */}
+          <div style={{ marginTop: "20px", display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+            <button 
+              onClick={onClose}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "6px",
+                border: "1px solid #ccc",
+                background: "#fff",
+                cursor: "pointer"
+              }}
+            >
+              Close
+            </button>
+            <button 
+              onClick={handlePrint}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "6px",
+                border: "none",
+                background: "#000",
+                color: "#fff",
+                cursor: "pointer"
+              }}
+            >
+              Print
+            </button>
           </div>
         </div>
-
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handlePrint();
-          }}
-          style={{
-            width: "100%", padding: "12px", background: "#16324A", color: "#fff", border: "none", borderRadius: 8,
-            fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8
-          }}
-        >
-          <Receipt size={18} /> Print Receipt
-        </button>
       </div>
-    </div>
+    </>
   );
 }
 
 function Row({ label, value, wrap }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 6, fontSize: 13 }}>
-      <span style={{ color: "#6B6058", fontFamily: "system-ui, sans-serif", whiteSpace: "nowrap" }}>{label}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", margin: "6px 0", fontSize: "14px" }}>
+      <span style={{ color: "#6B6058", fontFamily: "system-ui, sans-serif" }}>{label}</span>
       <span style={{ color: "#231F1B", textAlign: "right", wordBreak: wrap ? "break-word" : "normal" }}>{value}</span>
     </div>
   );
