@@ -1,13 +1,14 @@
 import React, { useRef, useState, useEffect, memo } from "react";
 import { useReactToPrint } from "react-to-print";
-import { Plus, Receipt, Clock, Smartphone, Banknote, X, Check, Trash2, AlertCircle, Wifi, WifiOff } from "lucide-react";
+import { Plus, Receipt, Clock, Smartphone, Banknote, X, Check, Trash2, AlertCircle, Wifi, WifiOff, Wallet } from "lucide-react";
 import { db } from "./firebase.js";
-import { collection, addDoc, deleteDoc, doc, setDoc, getDoc } from "firebase/firestore";
+import { collection, addDoc, deleteDoc, doc, setDoc, getDoc, getDocs } from "firebase/firestore";
 
 const money = (n) =>
   "KES " + Number(n || 0).toLocaleString("en-KE", { maximumFractionDigits: 0 });
 
 const todayKey = (d = new Date()) => d.toISOString().slice(0, 10);
+const monthKey = (d = new Date()) => d.toISOString().slice(0, 7);
 
 const fmtTime = (iso) =>
   new Date(iso).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" });
@@ -27,17 +28,35 @@ export default function App() {
   });
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
-  
+
   // Local-first transaction state
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem("restaurant_sales");
     return saved ? JSON.parse(saved) : [];
   });
 
+  // Expenses (budget tracking)
+  const [expenses, setExpenses] = useState(() => {
+    const saved = localStorage.getItem("restaurant_expenses");
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [dailyBudget, setDailyBudgetState] = useState(() => {
+    return localStorage.getItem("daily_budget") || "";
+  });
+  const [monthlyBudget, setMonthlyBudgetState] = useState(() => {
+    return localStorage.getItem("monthly_budget") || "";
+  });
+  const [expenseItem, setExpenseItem] = useState("");
+  const [expenseAmount, setExpenseAmount] = useState("");
+  const [editingBudget, setEditingBudget] = useState(false);
+  const [dailyBudgetDraft, setDailyBudgetDraft] = useState("");
+  const [monthlyBudgetDraft, setMonthlyBudgetDraft] = useState("");
+
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [view, setView] = useState("new");
   const [receipt, setReceipt] = useState(null);
   const [error, setError] = useState("");
+  const [clearing, setClearing] = useState(false);
 
   const [item, setItem] = useState("");
   const [amount, setAmount] = useState("");
@@ -45,10 +64,19 @@ export default function App() {
   const [mpesaCode, setMpesaCode] = useState("");
   const [customer, setCustomer] = useState("");
 
+  // Secret tap counter for "Clear all data"
+  const tapCountRef = useRef(0);
+  const tapTimerRef = useRef(null);
+
   // Save transactions to LocalStorage on every update
   useEffect(() => {
     localStorage.setItem("restaurant_sales", JSON.stringify(transactions));
   }, [transactions]);
+
+  // Save expenses to LocalStorage on every update
+  useEffect(() => {
+    localStorage.setItem("restaurant_expenses", JSON.stringify(expenses));
+  }, [expenses]);
 
   // Network monitor & auto-sync background process
   useEffect(() => {
@@ -58,7 +86,6 @@ export default function App() {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // Sync un-synced local records to Firebase when online
     if (isOnline) {
       syncUnsyncedTransactions();
     }
@@ -77,14 +104,12 @@ export default function App() {
       try {
         const { synced, id, ...dataToSync } = tx;
         await addDoc(collection(db, "transactions"), dataToSync);
-        
-        // Mark as synced locally
         setTransactions((prev) =>
           prev.map((item) => (item.id === tx.id ? { ...item, synced: true } : item))
         );
       } catch (err) {
         console.error("Background sync deferred:", err);
-        break; // Stop loop if connection drops mid-sync
+        break;
       }
     }
   };
@@ -138,12 +163,10 @@ export default function App() {
       synced: false,
     };
 
-    // Save locally right away (lightning fast)
     setTransactions((prev) => [newTx, ...prev]);
     setReceipt(newTx);
     resetForm();
 
-    // Try background upload if online
     if (isOnline) {
       try {
         const { synced, id, ...dataToSync } = newTx;
@@ -165,6 +188,104 @@ export default function App() {
       } catch (e) {
         console.error("Delete pending cloud update");
       }
+    }
+  };
+
+  // ---- Expense / Budget logic ----
+
+  const submitExpense = () => {
+    setError("");
+    const amt = parseFloat(expenseAmount);
+    if (!expenseItem.trim()) {
+      setError("Enter what was bought.");
+      return;
+    }
+    if (!amt || amt <= 0) {
+      setError("Enter a valid amount.");
+      return;
+    }
+
+    const newExpense = {
+      id: "exp_" + Date.now() + "_" + Math.random().toString(36).substring(2, 5),
+      item: expenseItem.trim(),
+      amount: amt,
+      time: new Date().toISOString(),
+    };
+
+    setExpenses((prev) => [newExpense, ...prev]);
+    setExpenseItem("");
+    setExpenseAmount("");
+  };
+
+  const removeExpense = (id) => {
+    setExpenses((prev) => prev.filter((e) => e.id !== id));
+  };
+
+  const saveBudgets = () => {
+    const daily = dailyBudgetDraft.trim();
+    const monthly = monthlyBudgetDraft.trim();
+    setDailyBudgetState(daily);
+    setMonthlyBudgetState(monthly);
+    localStorage.setItem("daily_budget", daily);
+    localStorage.setItem("monthly_budget", monthly);
+    setEditingBudget(false);
+  };
+
+  const todaysExpenses = expenses.filter((e) => todayKey(new Date(e.time)) === todayKey());
+  const monthsExpenses = expenses.filter((e) => monthKey(new Date(e.time)) === monthKey());
+  const todaySpent = todaysExpenses.reduce((s, e) => s + e.amount, 0);
+  const monthSpent = monthsExpenses.reduce((s, e) => s + e.amount, 0);
+  const dailyBudgetNum = parseFloat(dailyBudget) || 0;
+  const monthlyBudgetNum = parseFloat(monthlyBudget) || 0;
+  const dailyPct = dailyBudgetNum > 0 ? Math.min(100, (todaySpent / dailyBudgetNum) * 100) : 0;
+  const monthlyPct = monthlyBudgetNum > 0 ? Math.min(100, (monthSpent / monthlyBudgetNum) * 100) : 0;
+  const dailyOver = dailyBudgetNum > 0 && todaySpent > dailyBudgetNum;
+  const monthlyOver = monthlyBudgetNum > 0 && monthSpent > monthlyBudgetNum;
+
+  // ---- Clear all data (secret gesture) ----
+
+  const handleSecretTap = () => {
+    tapCountRef.current += 1;
+    if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
+    tapTimerRef.current = setTimeout(() => {
+      tapCountRef.current = 0;
+    }, 2000);
+
+    if (tapCountRef.current >= 5) {
+      tapCountRef.current = 0;
+      clearAllData();
+    }
+  };
+
+  const clearAllData = async () => {
+    const sure = window.confirm(
+      "Clear ALL sales and expense data? This cannot be undone."
+    );
+    if (!sure) return;
+
+    setClearing(true);
+    try {
+      // Clear local data
+      setTransactions([]);
+      setExpenses([]);
+      localStorage.removeItem("restaurant_sales");
+      localStorage.removeItem("restaurant_expenses");
+
+      // Clear cloud data if online
+      if (isOnline) {
+        try {
+          const snap = await getDocs(collection(db, "transactions"));
+          for (const d of snap.docs) {
+            await deleteDoc(doc(db, "transactions", d.id));
+          }
+        } catch (e) {
+          console.error("Cloud cleanup deferred:", e);
+        }
+      }
+
+      window.alert("All data cleared.");
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -206,7 +327,10 @@ export default function App() {
             {restaurantName}
           </div>
         )}
-        <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
+        <div
+          onClick={handleSecretTap}
+          style={{ fontSize: 12, opacity: 0.8, marginTop: 4, display: "flex", alignItems: "center", gap: 6, userSelect: "none" }}
+        >
           {isOnline ? <Wifi size={14} color="#3FA34D" /> : <WifiOff size={14} color="#E24B4A" />}
           <span>{isOnline ? "Online · Auto-sync active" : "Offline mode · Saving locally"}</span>
         </div>
@@ -320,13 +444,122 @@ export default function App() {
         </div>
       )}
 
+      {view === "budget" && (
+        <div style={{ padding: 18 }}>
+          <div style={{ background: "#fff", borderRadius: 14, padding: 18, marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#16324A" }}>Budgets</div>
+              {!editingBudget && (
+                <button
+                  onClick={() => {
+                    setDailyBudgetDraft(dailyBudget);
+                    setMonthlyBudgetDraft(monthlyBudget);
+                    setEditingBudget(true);
+                  }}
+                  style={{ background: "none", border: "none", color: "#16324A", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+
+            {editingBudget ? (
+              <>
+                <div style={{ fontSize: 13, color: "#6B6058", marginBottom: 6, fontWeight: 600 }}>DAILY BUDGET (KES)</div>
+                <input
+                  value={dailyBudgetDraft}
+                  onChange={(e) => setDailyBudgetDraft(e.target.value.replace(/[^0-9.]/g, ""))}
+                  placeholder="0"
+                  inputMode="decimal"
+                  style={inputStyle}
+                />
+                <div style={{ fontSize: 13, color: "#6B6058", margin: "14px 0 6px", fontWeight: 600 }}>MONTHLY BUDGET (KES)</div>
+                <input
+                  value={monthlyBudgetDraft}
+                  onChange={(e) => setMonthlyBudgetDraft(e.target.value.replace(/[^0-9.]/g, ""))}
+                  placeholder="0"
+                  inputMode="decimal"
+                  style={inputStyle}
+                />
+                <button onClick={saveBudgets} style={{ ...submitBtn, marginTop: 16 }}>
+                  <Check size={18} />
+                  Save budgets
+                </button>
+              </>
+            ) : (
+              <>
+                <BudgetBar
+                  label="TODAY"
+                  spent={todaySpent}
+                  budget={dailyBudgetNum}
+                  pct={dailyPct}
+                  over={dailyOver}
+                />
+                <div style={{ height: 14 }} />
+                <BudgetBar
+                  label="THIS MONTH"
+                  spent={monthSpent}
+                  budget={monthlyBudgetNum}
+                  pct={monthlyPct}
+                  over={monthlyOver}
+                />
+              </>
+            )}
+          </div>
+
+          <div style={{ background: "#fff", borderRadius: 14, padding: 18, marginBottom: 14 }}>
+            <div style={{ fontSize: 13, color: "#6B6058", marginBottom: 6, fontWeight: 600 }}>WHAT WAS BOUGHT</div>
+            <input
+              value={expenseItem}
+              onChange={(e) => setExpenseItem(e.target.value)}
+              placeholder="e.g. Chicken, Charcoal, Rice"
+              style={inputStyle}
+            />
+            <div style={{ fontSize: 13, color: "#6B6058", margin: "16px 0 6px", fontWeight: 600 }}>AMOUNT (KES)</div>
+            <input
+              value={expenseAmount}
+              onChange={(e) => setExpenseAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+              placeholder="0"
+              inputMode="decimal"
+              style={{ ...inputStyle, fontSize: 24, fontFamily: "ui-monospace, Menlo, monospace", fontWeight: 700 }}
+            />
+            {error && (
+              <div style={{ display: "flex", gap: 6, alignItems: "center", color: "#B33A2E", fontSize: 13, marginTop: 12 }}>
+                <AlertCircle size={15} /> {error}
+              </div>
+            )}
+            <button onClick={submitExpense} style={submitBtn}>
+              <Wallet size={18} />
+              Log expense
+            </button>
+          </div>
+
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10, color: "#16324A" }}>Recent expenses</div>
+          {expenses.length === 0 ? (
+            <EmptyState text="No expenses logged yet." />
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {expenses.slice(0, 30).map((e) => (
+                <ExpenseRow key={e.id} e={e} onDelete={() => removeExpense(e.id)} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderTop: "1px solid #E5E3DD", display: "flex", maxWidth: 480, margin: "0 auto" }}>
         <NavBtn active={view === "new"} onClick={() => setView("new")} icon={<Plus size={20} />} label="New sale" />
         <NavBtn active={view === "today"} onClick={() => setView("today")} icon={<Clock size={20} />} label="Today" />
         <NavBtn active={view === "history"} onClick={() => setView("history")} icon={<Receipt size={20} />} label="History" />
+        <NavBtn active={view === "budget"} onClick={() => setView("budget")} icon={<Wallet size={20} />} label="Budget" />
       </div>
 
       {receipt && <ReceiptModal t={receipt} restaurantName={restaurantName} onClose={() => setReceipt(null)} />}
+      {clearing && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(20,20,18,0.55)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700 }}>
+          Clearing data...
+        </div>
+      )}
     </div>
   );
 }
@@ -396,6 +629,41 @@ const TotalsBar = memo(function TotalsBar({ cash, mpesa, count }) {
   );
 });
 
+const BudgetBar = memo(function BudgetBar({ label, spent, budget, pct, over }) {
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+        <span style={{ fontSize: 12, color: "#6B6058", fontWeight: 600 }}>{label}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: over ? "#B33A2E" : "#16324A" }}>
+          {money(spent)} {budget > 0 ? `/ ${money(budget)}` : ""}
+        </span>
+      </div>
+      {budget > 0 ? (
+        <>
+          <div style={{ width: "100%", height: 8, background: "#EFEDE7", borderRadius: 6, overflow: "hidden" }}>
+            <div
+              style={{
+                width: `${pct}%`,
+                height: "100%",
+                background: over ? "#E24B4A" : "#3FA34D",
+                borderRadius: 6,
+                transition: "width 0.3s",
+              }}
+            />
+          </div>
+          {over && (
+            <div style={{ fontSize: 12, color: "#B33A2E", marginTop: 4 }}>
+              Over budget by {money(spent - budget)}
+            </div>
+          )}
+        </>
+      ) : (
+        <div style={{ fontSize: 12, color: "#A9A69E" }}>No budget set — tap Edit above.</div>
+      )}
+    </div>
+  );
+});
+
 const TxRow = memo(function TxRow({ t, onOpen, onDelete }) {
   const [confirmDel, setConfirmDel] = useState(false);
   return (
@@ -411,6 +679,32 @@ const TxRow = memo(function TxRow({ t, onOpen, onDelete }) {
       </div>
       <div onClick={onOpen} style={{ fontSize: 16, fontWeight: 700, fontFamily: "ui-monospace, Menlo, monospace", color: "#16324A", cursor: "pointer" }}>
         {money(t.amount)}
+      </div>
+      {confirmDel ? (
+        <button onClick={onDelete} style={{ background: "#E24B4A", border: "none", borderRadius: 8, padding: 8, color: "#fff" }}>
+          <Check size={14} />
+        </button>
+      ) : (
+        <button onClick={() => setConfirmDel(true)} style={{ background: "none", border: "none", color: "#B4B2A9", padding: 8 }}>
+          <Trash2 size={16} />
+        </button>
+      )}
+    </div>
+  );
+});
+
+const ExpenseRow = memo(function ExpenseRow({ e, onDelete }) {
+  const [confirmDel, setConfirmDel] = useState(false);
+  return (
+    <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: "#231F1B" }}>{e.item}</div>
+        <div style={{ fontSize: 12, color: "#6B6058", marginTop: 2 }}>
+          {fmtDateHead(todayKey(new Date(e.time)))} · {fmtTime(e.time)}
+        </div>
+      </div>
+      <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "ui-monospace, Menlo, monospace", color: "#B33A2E" }}>
+        -{money(e.amount)}
       </div>
       {confirmDel ? (
         <button onClick={onDelete} style={{ background: "#E24B4A", border: "none", borderRadius: 8, padding: 8, color: "#fff" }}>
