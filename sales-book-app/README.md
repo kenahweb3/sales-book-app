@@ -123,3 +123,4 @@ Anyone with the link can add or delete sales — same as handing someone the
 physical book. Only share the link with staff you trust with the till.
 If you ever want to lock it down further (e.g. a password), let me know and
 I can help add that.
+Deploy trigger
