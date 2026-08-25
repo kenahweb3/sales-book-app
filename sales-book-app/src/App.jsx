@@ -55,6 +55,7 @@ export default function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [view, setView] = useState("new");
   const [receipt, setReceipt] = useState(null);
+  const [dailyReport, setDailyReport] = useState(null);
   const [error, setError] = useState("");
   const [clearing, setClearing] = useState(false);
 
@@ -265,13 +266,11 @@ export default function App() {
 
     setClearing(true);
     try {
-      // Clear local data
       setTransactions([]);
       setExpenses([]);
       localStorage.removeItem("restaurant_sales");
       localStorage.removeItem("restaurant_expenses");
 
-      // Clear cloud data if online
       if (isOnline) {
         try {
           const snap = await getDocs(collection(db, "transactions"));
@@ -405,6 +404,15 @@ export default function App() {
       {view === "today" && (
         <div style={{ padding: 18 }}>
           <TotalsBar cash={todayCash} mpesa={todayMpesa} count={todays.length} />
+          {todays.length > 0 && (
+            <button
+              onClick={() => setDailyReport({ dateKey: todayKey(), list: todays, cash: todayCash, mpesa: todayMpesa })}
+              style={{ ...submitBtn, marginTop: 12, background: "#fff", color: "#16324A", border: "1px solid #DEDBD3" }}
+            >
+              <Receipt size={18} />
+              Print daily report
+            </button>
+          )}
           {todays.length === 0 ? (
             <EmptyState text="No sales recorded yet today." />
           ) : (
@@ -428,9 +436,17 @@ export default function App() {
               const mpesa = list.filter((t) => t.method === "mpesa").reduce((s, t) => s + t.amount, 0);
               return (
                 <div key={k} style={{ marginBottom: 22 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6, color: "#16324A" }}>
-                    {fmtDateHead(k)}
-                    <span style={{ fontWeight: 400, color: "#6B6058", fontSize: 13 }}> · {money(cash + mpesa)}</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#16324A" }}>
+                      {fmtDateHead(k)}
+                      <span style={{ fontWeight: 400, color: "#6B6058", fontSize: 13 }}> · {money(cash + mpesa)}</span>
+                    </div>
+                    <button
+                      onClick={() => setDailyReport({ dateKey: k, list, cash, mpesa })}
+                      style={{ background: "none", border: "none", color: "#16324A" }}
+                    >
+                      <Receipt size={16} />
+                    </button>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {list.map((t) => (
@@ -555,6 +571,7 @@ export default function App() {
       </div>
 
       {receipt && <ReceiptModal t={receipt} restaurantName={restaurantName} onClose={() => setReceipt(null)} />}
+      {dailyReport && <DailyReportModal report={dailyReport} restaurantName={restaurantName} onClose={() => setDailyReport(null)} />}
       {clearing && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(20,20,18,0.55)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700 }}>
           Clearing data...
@@ -752,6 +769,78 @@ function NavBtn({ active, onClick, icon, label }) {
   );
 }
 
+function DailyReportModal({ report, restaurantName, onClose }) {
+  const printRef = useRef();
+  const handlePrint = useReactToPrint({ contentRef: printRef });
+  const { dateKey, list, cash, mpesa } = report;
+  const dateLabel = new Date(dateKey + "T00:00:00").toLocaleDateString("en-KE", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(20,20,18,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 }}
+      onClick={onClose}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "center", width: "100%", maxWidth: 360, maxHeight: "90vh" }}>
+        <div
+          ref={printRef}
+          onClick={(e) => e.stopPropagation()}
+          style={{ background: "#fff", width: "100%", maxWidth: 380, margin: "0 auto", borderRadius: 4, padding: "26px 22px 18px", fontFamily: "ui-monospace, Menlo, monospace", position: "relative", overflowY: "auto", maxHeight: "80vh" }}
+        >
+          <button onClick={onClose} style={{ position: "absolute", top: 10, right: 10, background: "none", border: "none", color: "#B4B2A9" }}>
+            <X size={18} />
+          </button>
+
+          <div style={{ textAlign: "center", fontFamily: "system-ui, sans-serif", fontWeight: 800, fontSize: 17, color: "#16324A" }}>
+            {restaurantName}
+          </div>
+          <div style={{ textAlign: "center", fontSize: 11, color: "#6B6058", marginTop: 2, fontFamily: "system-ui, sans-serif" }}>
+            Daily sales report · {dateLabel}
+          </div>
+
+          <div style={{ borderTop: "1px dashed #CFCCC4", margin: "16px 0" }} />
+
+          {list.map((t) => (
+            <div key={t.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 12, marginBottom: 6 }}>
+              <span style={{ color: "#231F1B" }}>
+                {fmtTime(t.time)} · {t.item} ({t.method === "mpesa" ? "M-Pesa" : "Cash"})
+              </span>
+              <span style={{ color: "#231F1B", fontWeight: 700, whiteSpace: "nowrap" }}>{money(t.amount)}</span>
+            </div>
+          ))}
+
+          <div style={{ borderTop: "1px dashed #CFCCC4", margin: "16px 0" }} />
+
+          <Row label="Cash total" value={money(cash)} />
+          <Row label="M-Pesa total" value={money(mpesa)} />
+          <Row label="Sales count" value={String(list.length)} />
+
+          <div style={{ borderTop: "1px dashed #CFCCC4", margin: "16px 0" }} />
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span style={{ fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#6B6058", fontWeight: 600 }}>GRAND TOTAL</span>
+            <span style={{ fontSize: 24, fontWeight: 800 }}>{money(cash + mpesa)}</span>
+          </div>
+        </div>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handlePrint();
+          }}
+          style={{
+            width: "100%", padding: "12px", background: "#16324A", color: "#fff", border: "none", borderRadius: 8,
+            fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8
+          }}
+        >
+          <Receipt size={18} /> Print Report
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ReceiptModal({ t, restaurantName, onClose }) {
   const printRef = useRef();
   const handlePrint = useReactToPrint({ contentRef: printRef });
@@ -765,7 +854,7 @@ function ReceiptModal({ t, restaurantName, onClose }) {
         <div
           ref={printRef}
           onClick={(e) => e.stopPropagation()}
-          style={{ background: "#fff", width: "100%", borderRadius: 4, padding: "26px 22px 18px", fontFamily: "ui-monospace, Menlo, monospace", position: "relative" }}
+          style={{ background: "#fff", width: "100%", maxWidth: 380, margin: "0 auto", borderRadius: 4, padding: "26px 22px 18px", fontFamily: "ui-monospace, Menlo, monospace", position: "relative" }}
         >
           <button onClick={onClose} style={{ position: "absolute", top: 10, right: 10, background: "none", border: "none", color: "#B4B2A9" }}>
             <X size={18} />
