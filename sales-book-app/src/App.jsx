@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, memo } from "react";
 import { useReactToPrint } from "react-to-print";
-import { Plus, Receipt, Clock, Smartphone, Banknote, X, Check, Trash2, AlertCircle, Wifi, WifiOff, Wallet } from "lucide-react";
+import { Plus, Receipt, Clock, Smartphone, Banknote, X, Check, Trash2, AlertCircle, Wifi, WifiOff, Wallet, Lock, Unlock, KeyRound } from "lucide-react";
 import { db } from "./firebase.js";
 import { collection, addDoc, deleteDoc, doc, setDoc, getDocs } from "firebase/firestore";
 
@@ -28,6 +28,16 @@ export default function App() {
   });
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+
+  // Owner PIN States
+  const [ownerPin, setOwnerPin] = useState(() => {
+    return localStorage.getItem("owner_pin") || "1234";
+  });
+  const [isOwnerUnlocked, setIsOwnerUnlocked] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [changingPin, setChangingPin] = useState(false);
+  const [newPinDraft, setNewPinDraft] = useState("");
 
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem("restaurant_sales");
@@ -109,6 +119,15 @@ export default function App() {
     }
   };
 
+  const requireOwnerAccess = (onSuccessAction) => {
+    if (isOwnerUnlocked) {
+      onSuccessAction();
+    } else {
+      setPendingAction(() => onSuccessAction);
+      setShowPinModal(true);
+    }
+  };
+
   const saveName = async () => {
     const name = nameDraft.trim() || "My Restaurant";
     setRestaurantName(name);
@@ -121,6 +140,19 @@ export default function App() {
         console.error("Cloud name sync deferred");
       }
     }
+  };
+
+  const saveNewPin = () => {
+    if (newPinDraft.length !== 4 || !/^\d+$/.test(newPinDraft)) {
+      setError("PIN must be exactly 4 digits.");
+      return;
+    }
+    setOwnerPin(newPinDraft);
+    localStorage.setItem("owner_pin", newPinDraft);
+    setChangingPin(false);
+    setNewPinDraft("");
+    setError("");
+    alert("Owner PIN updated successfully!");
   };
 
   const resetForm = () => {
@@ -175,15 +207,17 @@ export default function App() {
     }
   };
 
-  const removeTx = async (id) => {
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
-    if (isOnline && !id.startsWith("loc_")) {
-      try {
-        await deleteDoc(doc(db, "transactions", id));
-      } catch (e) {
-        console.error("Delete pending cloud update");
+  const removeTx = (id) => {
+    requireOwnerAccess(async () => {
+      setTransactions((prev) => prev.filter((t) => t.id !== id));
+      if (isOnline && !id.startsWith("loc_")) {
+        try {
+          await deleteDoc(doc(db, "transactions", id));
+        } catch (e) {
+          console.error("Delete pending cloud update");
+        }
       }
-    }
+    });
   };
 
   const submitExpense = () => {
@@ -211,7 +245,9 @@ export default function App() {
   };
 
   const removeExpense = (id) => {
-    setExpenses((prev) => prev.filter((e) => e.id !== id));
+    requireOwnerAccess(() => {
+      setExpenses((prev) => prev.filter((e) => e.id !== id));
+    });
   };
 
   const saveBudgets = () => {
@@ -244,7 +280,7 @@ export default function App() {
 
     if (tapCountRef.current >= 5) {
       tapCountRef.current = 0;
-      clearAllData();
+      requireOwnerAccess(clearAllData);
     }
   };
 
@@ -292,33 +328,50 @@ export default function App() {
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", fontFamily: "system-ui, -apple-system, sans-serif", background: "#F5F6F3", minHeight: "100vh", paddingBottom: 84 }}>
       <div style={{ background: "#16324A", color: "#fff", padding: "20px 18px 16px" }}>
-        {editingName ? (
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              autoFocus
-              value={nameDraft}
-              onChange={(e) => setNameDraft(e.target.value)}
-              placeholder="Restaurant name"
-              style={{ flex: 1, padding: "8px 10px", borderRadius: 8, border: "none", fontSize: 16 }}
-            />
-            <button onClick={saveName} style={{ background: "#3FA34D", border: "none", borderRadius: 8, padding: "0 14px", color: "#fff" }}>
-              <Check size={18} />
-            </button>
-          </div>
-        ) : (
-          <div
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {editingName ? (
+            <div style={{ display: "flex", gap: 8, flex: 1, marginRight: 10 }}>
+              <input
+                autoFocus
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                placeholder="Restaurant name"
+                style={{ flex: 1, padding: "8px 10px", borderRadius: 8, border: "none", fontSize: 16 }}
+              />
+              <button onClick={saveName} style={{ background: "#3FA34D", border: "none", borderRadius: 8, padding: "0 14px", color: "#fff" }}>
+                <Check size={18} />
+              </button>
+            </div>
+          ) : (
+            <div
+              onClick={() => {
+                setNameDraft(restaurantName);
+                setEditingName(true);
+              }}
+              style={{ fontSize: 20, fontWeight: 700, cursor: "pointer" }}
+            >
+              {restaurantName}
+            </div>
+          )}
+
+          <button
             onClick={() => {
-              setNameDraft(restaurantName);
-              setEditingName(true);
+              if (isOwnerUnlocked) {
+                setIsOwnerUnlocked(false);
+              } else {
+                requireOwnerAccess(() => {});
+              }
             }}
-            style={{ fontSize: 20, fontWeight: 700, cursor: "pointer" }}
+            style={{ background: isOwnerUnlocked ? "#3FA34D" : "rgba(255,255,255,0.15)", border: "none", borderRadius: 20, padding: "6px 12px", color: "#fff", display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
           >
-            {restaurantName}
-          </div>
-        )}
+            {isOwnerUnlocked ? <Unlock size={14} /> : <Lock size={14} />}
+            {isOwnerUnlocked ? "Owner Unlocked" : "Staff Mode"}
+          </button>
+        </div>
+
         <div
           onClick={handleSecretTap}
-          style={{ fontSize: 12, opacity: 0.8, marginTop: 4, display: "flex", alignItems: "center", gap: 6, userSelect: "none" }}
+          style={{ fontSize: 12, opacity: 0.8, marginTop: 6, display: "flex", alignItems: "center", gap: 6, userSelect: "none" }}
         >
           {isOnline ? <Wifi size={14} color="#3FA34D" /> : <WifiOff size={14} color="#E24B4A" />}
           <span>{isOnline ? "Online · Auto-sync active" : "Offline mode · Saving locally"}</span>
@@ -540,6 +593,34 @@ export default function App() {
             </button>
           </div>
 
+          <div style={{ background: "#fff", borderRadius: 14, padding: 18, marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#16324A" }}>Owner Security</div>
+              <button
+                onClick={() => setChangingPin(!changingPin)}
+                style={{ background: "none", border: "none", color: "#16324A", fontWeight: 600, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+              >
+                <KeyRound size={14} /> Change PIN
+              </button>
+            </div>
+            {changingPin && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontSize: 12, color: "#6B6058", marginBottom: 6 }}>NEW 4-DIGIT PIN</div>
+                <input
+                  type="password"
+                  maxLength={4}
+                  value={newPinDraft}
+                  onChange={(e) => setNewPinDraft(e.target.value.replace(/[^0-9]/g, ""))}
+                  placeholder="••••"
+                  style={{ ...inputStyle, fontSize: 18, textAlign: "center", tracking: 4 }}
+                />
+                <button onClick={saveNewPin} style={{ ...submitBtn, marginTop: 10, padding: "10px 0" }}>
+                  Update Owner PIN
+                </button>
+              </div>
+            )}
+          </div>
+
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10, color: "#16324A" }}>Recent expenses</div>
           {expenses.length === 0 ? (
             <EmptyState text="No expenses logged yet." />
@@ -556,9 +637,41 @@ export default function App() {
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderTop: "1px solid #E5E3DD", display: "flex", maxWidth: 480, margin: "0 auto" }}>
         <NavBtn active={view === "new"} onClick={() => setView("new")} icon={<Plus size={20} />} label="New sale" />
         <NavBtn active={view === "today"} onClick={() => setView("today")} icon={<Clock size={20} />} label="Today" />
-        <NavBtn active={view === "history"} onClick={() => setView("history")} icon={<Receipt size={20} />} label="History" />
-        <NavBtn active={view === "budget"} onClick={() => setView("budget")} icon={<Wallet size={20} />} label="Budget" />
+        <NavBtn
+          active={view === "history"}
+          onClick={() => {
+            requireOwnerAccess(() => setView("history"));
+          }}
+          icon={<Receipt size={20} />}
+          label="History 🔒"
+        />
+        <NavBtn
+          active={view === "budget"}
+          onClick={() => {
+            requireOwnerAccess(() => setView("budget"));
+          }}
+          icon={<Wallet size={20} />}
+          label="Budget 🔒"
+        />
       </div>
+
+      {showPinModal && (
+        <PinModal
+          expectedPin={ownerPin}
+          onSuccess={() => {
+            setIsOwnerUnlocked(true);
+            setShowPinModal(false);
+            if (pendingAction) {
+              pendingAction();
+              setPendingAction(null);
+            }
+          }}
+          onClose={() => {
+            setShowPinModal(false);
+            setPendingAction(null);
+          }}
+        />
+      )}
 
       {receipt && <ReceiptModal t={receipt} restaurantName={restaurantName} onClose={() => setReceipt(null)} />}
       {dailyReport && <DailyReportModal report={dailyReport} restaurantName={restaurantName} onClose={() => setDailyReport(null)} />}
@@ -567,6 +680,53 @@ export default function App() {
           Clearing data...
         </div>
       )}
+    </div>
+  );
+}
+
+function PinModal({ expectedPin, onSuccess, onClose }) {
+  const [pin, setPin] = useState("");
+  const [err, setErr] = useState("");
+
+  const handleVerify = () => {
+    if (pin === expectedPin) {
+      onSuccess();
+    } else {
+      setErr("Incorrect PIN");
+      setPin("");
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(20,20,18,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, zIndex: 100 }} onClick={onClose}>
+      <div style={{ background: "#fff", borderRadius: 14, padding: 22, width: "100%", maxWidth: 300, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#F5F6F3", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", color: "#16324A" }}>
+          <Lock size={22} />
+        </div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "#16324A", marginBottom: 4 }}>Owner PIN Required</div>
+        <div style={{ fontSize: 13, color: "#6B6058", marginBottom: 16 }}>Enter 4-digit PIN to access (Default: 1234)</div>
+
+        <input
+          type="password"
+          maxLength={4}
+          autoFocus
+          value={pin}
+          onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ""))}
+          placeholder="••••"
+          style={{ width: "100%", boxSizing: "border-box", padding: "12px", borderRadius: 10, border: "1px solid #DEDBD3", fontSize: 24, textAlign: "center", letterSpacing: 8, outline: "none" }}
+        />
+
+        {err && <div style={{ color: "#B33A2E", fontSize: 12, marginTop: 8, fontWeight: 600 }}>{err}</div>}
+
+        <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "1px solid #DEDBD3", background: "#fff", color: "#6B6058", fontWeight: 600, cursor: "pointer" }}>
+            Cancel
+          </button>
+          <button onClick={handleVerify} style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "none", background: "#16324A", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
+            Unlock
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
