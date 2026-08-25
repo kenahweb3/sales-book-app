@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, memo } from "react";
 import { useReactToPrint } from "react-to-print";
 import { Plus, Receipt, Clock, Smartphone, Banknote, X, Check, Trash2, AlertCircle, Wifi, WifiOff, Wallet } from "lucide-react";
 import { db } from "./firebase.js";
-import { collection, addDoc, deleteDoc, doc, setDoc, getDoc, getDocs } from "firebase/firestore";
+import { collection, addDoc, deleteDoc, doc, setDoc, getDocs } from "firebase/firestore";
 
 const money = (n) =>
   "KES " + Number(n || 0).toLocaleString("en-KE", { maximumFractionDigits: 0 });
@@ -29,13 +29,11 @@ export default function App() {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
 
-  // Local-first transaction state
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem("restaurant_sales");
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Expenses (budget tracking)
   const [expenses, setExpenses] = useState(() => {
     const saved = localStorage.getItem("restaurant_expenses");
     return saved ? JSON.parse(saved) : [];
@@ -65,21 +63,17 @@ export default function App() {
   const [mpesaCode, setMpesaCode] = useState("");
   const [customer, setCustomer] = useState("");
 
-  // Secret tap counter for "Clear all data"
   const tapCountRef = useRef(0);
   const tapTimerRef = useRef(null);
 
-  // Save transactions to LocalStorage on every update
   useEffect(() => {
     localStorage.setItem("restaurant_sales", JSON.stringify(transactions));
   }, [transactions]);
 
-  // Save expenses to LocalStorage on every update
   useEffect(() => {
     localStorage.setItem("restaurant_expenses", JSON.stringify(expenses));
   }, [expenses]);
 
-  // Network monitor & auto-sync background process
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -95,7 +89,7 @@ export default function App() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [isOnline, transactions]);
+  }, [isOnline]);
 
   const syncUnsyncedTransactions = async () => {
     const pending = transactions.filter((t) => !t.synced);
@@ -192,8 +186,6 @@ export default function App() {
     }
   };
 
-  // ---- Expense / Budget logic ----
-
   const submitExpense = () => {
     setError("");
     const amt = parseFloat(expenseAmount);
@@ -242,8 +234,6 @@ export default function App() {
   const monthlyPct = monthlyBudgetNum > 0 ? Math.min(100, (monthSpent / monthlyBudgetNum) * 100) : 0;
   const dailyOver = dailyBudgetNum > 0 && todaySpent > dailyBudgetNum;
   const monthlyOver = monthlyBudgetNum > 0 && monthSpent > monthlyBudgetNum;
-
-  // ---- Clear all data (secret gesture) ----
 
   const handleSecretTap = () => {
     tapCountRef.current += 1;
@@ -443,7 +433,7 @@ export default function App() {
                     </div>
                     <button
                       onClick={() => setDailyReport({ dateKey: k, list, cash, mpesa })}
-                      style={{ background: "none", border: "none", color: "#16324A" }}
+                      style={{ background: "none", border: "none", color: "#16324A", cursor: "pointer" }}
                     >
                       <Receipt size={16} />
                     </button>
@@ -629,18 +619,18 @@ const submitBtn = {
 
 const TotalsBar = memo(function TotalsBar({ cash, mpesa, count }) {
   return (
-    <div style={{ display: "flex", gap: 10 }}>
-      <div style={{ flex: 1, background: "#fff", borderRadius: 12, padding: "12px 14px" }}>
-        <div style={{ fontSize: 12, color: "#6B6058", fontWeight: 600 }}>CASH</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#8A5A17", fontFamily: "ui-monospace, Menlo, monospace" }}>{money(cash)}</div>
+    <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ flex: 1, background: "#fff", borderRadius: 12, padding: "10px 8px", minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: "#6B6058", fontWeight: 600 }}>CASH</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#8A5A17", fontFamily: "ui-monospace, Menlo, monospace", wordBreak: "break-all" }}>{money(cash)}</div>
       </div>
-      <div style={{ flex: 1, background: "#fff", borderRadius: 12, padding: "12px 14px" }}>
-        <div style={{ fontSize: 12, color: "#6B6058", fontWeight: 600 }}>M-PESA</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#256B31", fontFamily: "ui-monospace, Menlo, monospace" }}>{money(mpesa)}</div>
+      <div style={{ flex: 1, background: "#fff", borderRadius: 12, padding: "10px 8px", minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: "#6B6058", fontWeight: 600 }}>M-PESA</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#256B31", fontFamily: "ui-monospace, Menlo, monospace", wordBreak: "break-all" }}>{money(mpesa)}</div>
       </div>
-      <div style={{ flex: 1, background: "#16324A", borderRadius: 12, padding: "12px 14px" }}>
-        <div style={{ fontSize: 12, color: "#B8C6D2", fontWeight: 600 }}>TOTAL · {count}</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", fontFamily: "ui-monospace, Menlo, monospace" }}>{money(cash + mpesa)}</div>
+      <div style={{ flex: 1, background: "#16324A", borderRadius: 12, padding: "10px 8px", minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: "#B8C6D2", fontWeight: 600 }}>TOTAL · {count}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", fontFamily: "ui-monospace, Menlo, monospace", wordBreak: "break-all" }}>{money(cash + mpesa)}</div>
       </div>
     </div>
   );
@@ -649,7 +639,7 @@ const TotalsBar = memo(function TotalsBar({ cash, mpesa, count }) {
 const BudgetBar = memo(function BudgetBar({ label, spent, budget, pct, over }) {
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, flexWrap: "wrap", gap: 4 }}>
         <span style={{ fontSize: 12, color: "#6B6058", fontWeight: 600 }}>{label}</span>
         <span style={{ fontSize: 13, fontWeight: 700, color: over ? "#B33A2E" : "#16324A" }}>
           {money(spent)} {budget > 0 ? `/ ${money(budget)}` : ""}
@@ -685,24 +675,24 @@ const TxRow = memo(function TxRow({ t, onOpen, onDelete }) {
   const [confirmDel, setConfirmDel] = useState(false);
   return (
     <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-      <div onClick={onOpen} style={{ flex: 1, cursor: "pointer" }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: "#231F1B" }}>
+      <div onClick={onOpen} style={{ flex: 1, cursor: "pointer", minWidth: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: "#231F1B", wordBreak: "break-word" }}>
           {t.item} {!t.synced && <span style={{ fontSize: 11, color: "#C9862B", fontWeight: 400 }}>(Pending sync)</span>}
         </div>
-        <div style={{ fontSize: 12, color: "#6B6058", marginTop: 2 }}>
+        <div style={{ fontSize: 12, color: "#6B6058", marginTop: 2, wordBreak: "break-word" }}>
           {fmtTime(t.time)} · {t.method === "mpesa" ? `M-Pesa · ${t.mpesaCode}` : "Cash"}
           {t.customer ? ` · ${t.customer}` : ""}
         </div>
       </div>
-      <div onClick={onOpen} style={{ fontSize: 16, fontWeight: 700, fontFamily: "ui-monospace, Menlo, monospace", color: "#16324A", cursor: "pointer" }}>
+      <div onClick={onOpen} style={{ fontSize: 15, fontWeight: 700, fontFamily: "ui-monospace, Menlo, monospace", color: "#16324A", cursor: "pointer", whiteSpace: "nowrap" }}>
         {money(t.amount)}
       </div>
       {confirmDel ? (
-        <button onClick={onDelete} style={{ background: "#E24B4A", border: "none", borderRadius: 8, padding: 8, color: "#fff" }}>
+        <button onClick={onDelete} style={{ background: "#E24B4A", border: "none", borderRadius: 8, padding: 8, color: "#fff", cursor: "pointer" }}>
           <Check size={14} />
         </button>
       ) : (
-        <button onClick={() => setConfirmDel(true)} style={{ background: "none", border: "none", color: "#B4B2A9", padding: 8 }}>
+        <button onClick={() => setConfirmDel(true)} style={{ background: "none", border: "none", color: "#B4B2A9", padding: 8, cursor: "pointer" }}>
           <Trash2 size={16} />
         </button>
       )}
@@ -714,21 +704,21 @@ const ExpenseRow = memo(function ExpenseRow({ e, onDelete }) {
   const [confirmDel, setConfirmDel] = useState(false);
   return (
     <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: "#231F1B" }}>{e.item}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: "#231F1B", wordBreak: "break-word" }}>{e.item}</div>
         <div style={{ fontSize: 12, color: "#6B6058", marginTop: 2 }}>
           {fmtDateHead(todayKey(new Date(e.time)))} · {fmtTime(e.time)}
         </div>
       </div>
-      <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "ui-monospace, Menlo, monospace", color: "#B33A2E" }}>
+      <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "ui-monospace, Menlo, monospace", color: "#B33A2E", whiteSpace: "nowrap" }}>
         -{money(e.amount)}
       </div>
       {confirmDel ? (
-        <button onClick={onDelete} style={{ background: "#E24B4A", border: "none", borderRadius: 8, padding: 8, color: "#fff" }}>
+        <button onClick={onDelete} style={{ background: "#E24B4A", border: "none", borderRadius: 8, padding: 8, color: "#fff", cursor: "pointer" }}>
           <Check size={14} />
         </button>
       ) : (
-        <button onClick={() => setConfirmDel(true)} style={{ background: "none", border: "none", color: "#B4B2A9", padding: 8 }}>
+        <button onClick={() => setConfirmDel(true)} style={{ background: "none", border: "none", color: "#B4B2A9", padding: 8, cursor: "pointer" }}>
           <Trash2 size={16} />
         </button>
       )}
@@ -769,26 +759,50 @@ function NavBtn({ active, onClick, icon, label }) {
   );
 }
 
-function DailyReportModal({ report, restaurantName, onClose }) {
+function Row({ label, value }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, marginBottom: 6, flexWrap: "wrap" }}>
+      <span style={{ color: "#6B6058" }}>{label}</span>
+      <span style={{ color: "#231F1B", fontWeight: 700, wordBreak: "break-word", textAlign: "right" }}>{value}</span>
+    </div>
+  );
+}
+
+function ReceiptModal({ t, restaurantName, onClose }) {
   const printRef = useRef();
   const handlePrint = useReactToPrint({ contentRef: printRef });
-  const { dateKey, list, cash, mpesa } = report;
-  const dateLabel = new Date(dateKey + "T00:00:00").toLocaleDateString("en-KE", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
-  });
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(20,20,18,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(20,20,18,0.55)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 12,
+        zIndex: 50,
+      }}
       onClick={onClose}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "center", width: "100%", maxWidth: 360, maxHeight: "90vh" }}>
+      <div
+        style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "center", width: "100%", maxWidth: 360, maxHeight: "90vh" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div
           ref={printRef}
-          onClick={(e) => e.stopPropagation()}
-          style={{ background: "#fff", width: "100%", maxWidth: 380, margin: "0 auto", borderRadius: 4, padding: "26px 22px 18px", fontFamily: "ui-monospace, Menlo, monospace", position: "relative", overflowY: "auto", maxHeight: "80vh" }}
+          style={{
+            background: "#fff",
+            width: "100%",
+            boxSizing: "border-box",
+            borderRadius: 6,
+            padding: "20px 16px 16px",
+            fontFamily: "ui-monospace, Menlo, monospace",
+            position: "relative",
+          }}
         >
-          <button onClick={onClose} style={{ position: "absolute", top: 10, right: 10, background: "none", border: "none", color: "#B4B2A9" }}>
+          <button onClick={onClose} style={{ position: "absolute", top: 10, right: 10, background: "none", border: "none", color: "#B4B2A9", cursor: "pointer" }}>
             <X size={18} />
           </button>
 
@@ -796,172 +810,114 @@ function DailyReportModal({ report, restaurantName, onClose }) {
             {restaurantName}
           </div>
           <div style={{ textAlign: "center", fontSize: 11, color: "#6B6058", marginTop: 2, fontFamily: "system-ui, sans-serif" }}>
-            Daily sales report · {dateLabel}
+            Sales receipt
           </div>
 
-          <div style={{ borderTop: "1px dashed #CFCCC4", margin: "16px 0" }} />
+          <div style={{ borderTop: "1px dashed #CFCCC4", margin: "14px 0" }} />
 
-          {list.map((t) => (
-            <div key={t.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 12, marginBottom: 6 }}>
-              <span style={{ color: "#231F1B" }}>
-                {fmtTime(t.time)} · {t.item} ({t.method === "mpesa" ? "M-Pesa" : "Cash"})
-              </span>
-              <span style={{ color: "#231F1B", fontWeight: 700, whiteSpace: "nowrap" }}>{money(t.amount)}</span>
-            </div>
-          ))}
+          <Row label="Date" value={fmtDateHead(todayKey(new Date(t.time)))} />
+          <Row label="Time" value={fmtTime(t.time)} />
+          <Row label="Item" value={t.item} />
+          <Row label="Payment method" value={t.method === "mpesa" ? "M-Pesa" : "Cash"} />
+          {t.method === "mpesa" && <Row label="M-Pesa code" value={t.mpesaCode} />}
+          {t.customer && <Row label="Customer" value={t.customer} />}
 
-          <div style={{ borderTop: "1px dashed #CFCCC4", margin: "16px 0" }} />
+          <div style={{ borderTop: "1px dashed #CFCCC4", margin: "14px 0" }} />
 
-          <Row label="Cash total" value={money(cash)} />
-          <Row label="M-Pesa total" value={money(mpesa)} />
-          <Row label="Sales count" value={String(list.length)} />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 6 }}>
+            <span style={{ fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#6B6058", fontWeight: 600 }}>TOTAL</span>
+            <span style={{ fontSize: 20, fontWeight: 800 }}>{money(t.amount)}</span>
+          </div>
 
-          <div style={{ borderTop: "1px dashed #CFCCC4", margin: "16px 0" }} />
-
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span style={{ fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#6B6058", fontWeight: 600 }}>GRAND TOTAL</span>
-            <span style={{ fontSize: 24, fontWeight: 800 }}>{money(cash + mpesa)}</span>
+          <div style={{ textAlign: "center", fontSize: 11, color: "#A9A69E", marginTop: 16, fontFamily: "system-ui, sans-serif" }}>
+            Thank you for your business!
           </div>
         </div>
 
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handlePrint();
-          }}
-          style={{
-            width: "100%", padding: "12px", background: "#16324A", color: "#fff", border: "none", borderRadius: 8,
-            fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8
-          }}
-        >
-          <Receipt size={18} /> Print Report
+        <button onClick={handlePrint} style={{ ...submitBtn, marginTop: 0, background: "#3FA34D" }}>
+          Print Receipt
         </button>
       </div>
     </div>
   );
 }
 
-  function ReceiptModal({ t, restaurantName, onClose }) {
-  const handlePrint = () => {
-    window.print();
-  };
+function DailyReportModal({ report, restaurantName, onClose }) {
+  const printRef = useRef();
+  const handlePrint = useReactToPrint({ contentRef: printRef });
 
   return (
-    <>
-      <style>{`
-        @media print {
-          /* Hide everything except printable receipt */
-          body * {
-            visibility: hidden !important;
-          }
-          #printable-receipt, #printable-receipt * {
-            visibility: visible !important;
-          }
-          #printable-receipt {
-            position: absolute !important;
-            left: 0 !important;
-            right: 0 !important;
-            top: 0 !important;
-            margin: 0 auto !important;
-            width: 100% !important;
-            max-width: 280px !important;
-            box-sizing: border-box !important;
-            padding: 10px !important;
-          }
-        }
-      `}</style>
-
-      {/* Main Modal Overlay */}
-      <div 
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: "rgba(0, 0, 0, 0.5)",
-          display: "flex",
-          justifyContent: "center",
-          align-items: "center",
-          zIndex: 1000,
-          padding: "16px"
-        }}
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(20,20,18,0.55)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 12,
+        zIndex: 50,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "center", width: "100%", maxWidth: 360, maxHeight: "90vh" }}
+        onClick={(e) => e.stopPropagation()}
       >
-        <div 
+        <div
+          ref={printRef}
           style={{
-            backgroundColor: "#fff",
-            padding: "20px 16px",
-            borderRadius: "8px",
+            background: "#fff",
             width: "100%",
-            maxWidth: "340px",
             boxSizing: "border-box",
-            maxHeight: "90vh",
-            overflowY: "auto"
+            borderRadius: 6,
+            padding: "20px 16px 16px",
+            fontFamily: "ui-monospace, Menlo, monospace",
+            position: "relative",
+            maxHeight: "70vh",
+            overflowY: "auto",
           }}
         >
-          {/* Printable Area */}
-          <div id="printable-receipt" style={{ textAlign: "center", color: "#231F1B", width: "100%", boxSizing: "border-box" }}>
-            <h3 style={{ margin: "0 0 4px 0", fontWeight: "bold" }}>{restaurantName || "My Restaurant"}</h3>
-            <p style={{ margin: "0 0 12px 0", fontSize: "12px", color: "#6B6058" }}>Sales receipt</p>
-            <hr style={{ border: "none", borderTop: "1px dashed #ccc", margin: "12px 0" }} />
+          <button onClick={onClose} style={{ position: "absolute", top: 10, right: 10, background: "none", border: "none", color: "#B4B2A9", cursor: "pointer" }}>
+            <X size={18} />
+          </button>
 
-            <Row label="Date" value={t?.date || new Date().toLocaleDateString()} />
-            <Row label="Time" value={t?.time || new Date().toLocaleTimeString()} />
-            <Row label="Item" value={t?.item || "—"} wrap />
-            <Row label="Customer" value={t?.customer || "—"} wrap />
-            <Row label="Method" value={t?.method || "—"} />
-
-            <hr style={{ border: "none", borderTop: "1px dashed #ccc", margin: "12px 0" }} />
-
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontWeight: "bold", fontSize: "15px", margin: "12px 0" }}>
-              <span>TOTAL</span>
-              <span>KES {t?.total || t?.amount || 0}</span>
-            </div>
-
-            <p style={{ margin: "16px 0 0 0", fontSize: "11px", color: "#6B6058" }}>Thank you — asante</p>
+          <div style={{ textAlign: "center", fontFamily: "system-ui, sans-serif", fontWeight: 800, fontSize: 17, color: "#16324A" }}>
+            {restaurantName}
+          </div>
+          <div style={{ textAlign: "center", fontSize: 11, color: "#6B6058", marginTop: 2, fontFamily: "system-ui, sans-serif" }}>
+            Daily Summary Report
           </div>
 
-          {/* Action Buttons */}
-          <div style={{ marginTop: "20px", display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-            <button 
-              onClick={onClose}
-              style={{
-                padding: "8px 16px",
-                borderRadius: "6px",
-                border: "1px solid #ccc",
-                background: "#fff",
-                cursor: "pointer",
-                fontSize: "14px"
-              }}
-            >
-              Close
-            </button>
-            <button 
-              onClick={handlePrint}
-              style={{
-                padding: "8px 16px",
-                borderRadius: "6px",
-                border: "none",
-                background: "#000",
-                color: "#fff",
-                cursor: "pointer",
-                fontSize: "14px"
-              }}
-            >
-              Print
-            </button>
+          <div style={{ borderTop: "1px dashed #CFCCC4", margin: "14px 0" }} />
+
+          <Row label="Date" value={fmtDateHead(report.dateKey)} />
+          <Row label="Transactions" value={report.list.length} />
+          <Row label="Cash total" value={money(report.cash)} />
+          <Row label="M-Pesa total" value={money(report.mpesa)} />
+
+          <div style={{ borderTop: "1px dashed #CFCCC4", margin: "14px 0" }} />
+
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, fontFamily: "system-ui, sans-serif" }}>Item Breakdown</div>
+          {report.list.map((t, idx) => (
+            <div key={idx} style={{ fontSize: 11, marginBottom: 6, display: "flex", justifyContent: "space-between", gap: 8 }}>
+              <span style={{ wordBreak: "break-word" }}>{t.item}</span>
+              <span style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{money(t.amount)}</span>
+            </div>
+          ))}
+
+          <div style={{ borderTop: "1px dashed #CFCCC4", margin: "14px 0" }} />
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 6 }}>
+            <span style={{ fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#6B6058", fontWeight: 600 }}>GRAND TOTAL</span>
+            <span style={{ fontSize: 20, fontWeight: 800 }}>{money(report.cash + report.mpesa)}</span>
           </div>
         </div>
-      </div>
-    </>
-  );
-}
 
-function Row({ label, value, wrap }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", margin: "6px 0", fontSize: "13px" }}>
-      <span style={{ color: "#6B6058", fontFamily: "system-ui, sans-serif", flexShrink: 0 }}>{label}</span>
-      <span style={{ color: "#231F1B", textAlign: "right", wordBreak: wrap ? "break-word" : "normal" }}>{value}</span>
+        <button onClick={handlePrint} style={{ ...submitBtn, marginTop: 0, background: "#3FA34D" }}>
+          Print Daily Report
+        </button>
+      </div>
     </div>
   );
 }
